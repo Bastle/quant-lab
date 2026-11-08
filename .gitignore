@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .superpowers/
 data/quant.db
+data/kline/
