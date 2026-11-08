@@ -8,9 +8,13 @@ from backtest.indicators import calc_ma
 
 
 def make_test_df() -> pd.DataFrame:
-    """构造测试 K 线数据（先涨后跌）"""
+    """构造测试 K 线数据（先跌后涨再跌，保证 MA 金叉和死叉都能出现）"""
     dates = pd.date_range("2024-01-01", periods=100, freq="B")
-    prices = [100 + i * 0.5 for i in range(60)] + [130 - (i - 60) * 0.8 for i in range(40)]
+    prices = (
+        [130 - i * 0.5 for i in range(30)]   # 下跌 130 → 115.5
+        + [115 + i * 0.8 for i in range(40)]  # 上涨 115 → 146.2
+        + [146 - i * 0.7 for i in range(30)]  # 下跌 146 → 125.3
+    )
     return pd.DataFrame({
         "date": dates,
         "open": prices,
