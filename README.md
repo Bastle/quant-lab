@@ -15,12 +15,30 @@
 # 1. 安装依赖
 pip install -r requirements.txt
 
-# 2. 下载历史数据
+# 2. 下载历史数据（单只，或 --list all 批量拉恒生科技+恒生指数成分股）
 python scripts/download_kline.py --code 00700 --years 5
+python scripts/download_kline.py --list all --years 5
 
 # 3. 运行回测
 python -m backtest.run --code 00700 --strategy ma_cross
 ```
+
+## 数据更新（增量 + 定期全量校正）
+
+```bash
+# 日常增量：拉最近 ~30 根，只写入新日期（约 100 只 ≈ 5 分钟）
+python scripts/download_kline.py --update-all
+
+# 定期全量校正：整段重拉替换，消除前复权漂移（约 100 只 ≈ 10~12 分钟）
+python scripts/download_kline.py --update-all --full
+
+# 单只更新（无存量数据时自动全量下载）
+python scripts/download_kline.py --code 00700
+```
+
+⚠️ **前复权（qfq）取舍**：qfq 价格以最新价为基准回溯调整，分红除权后全部历史价格会被重算。
+两次 `--full` 全量校正之间，增量追加的新 K 线与旧历史的复权基准可能短暂不一致。
+MA 金叉类策略影响很小；做精确回测（事件驱动、分红策略）前请先跑一次 `--full`。
 
 ## 项目结构
 
@@ -30,19 +48,21 @@ quant-lab/
 ├── README.md              # 本文件
 ├── requirements.txt       # Python 依赖
 ├── config.py              # 全局配置
+├── storage.py             # SQLite 存储层
 ├── data/
-│   ├── kline/             # K 线 JSON 文件
+│   ├── kline/             # K 线 JSON 文件（与热力图项目共享格式）
+│   ├── index_constituents.json  # 恒生科技/恒生指数成分股名单
 │   └── quant.db           # SQLite 数据库
 ├── scripts/
-│   └── download_kline.py  # 历史数据下载
+│   ├── download_kline.py  # 历史数据下载/更新
+│   └── import_kline.py    # 存量 JSON 批量导入 SQLite
 ├── backtest/
 │   ├── __init__.py
 │   ├── engine.py          # 回测引擎
 │   ├── strategy.py        # 策略定义
 │   ├── indicators.py      # 技术指标
 │   └── report.py          # 报告生成
-└── tests/
-    └── test_engine.py
+└── tests/                 # pytest 测试
 ```
 
 ## 与热力图项目的关系
