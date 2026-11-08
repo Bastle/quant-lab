@@ -4,28 +4,28 @@
     python -m backtest.run --code 00700 --strategy ma_cross
 """
 import argparse
-import json
 from pathlib import Path
 
 import pandas as pd
 
+import storage
+from config import DB_PATH
 from .engine import BacktestEngine, BacktestConfig
 from .strategy import MACrossStrategy
 from .report import print_report
 
 
-def load_kline(code: str) -> pd.DataFrame:
-    """从 JSON 文件加载 K 线数据"""
-    filepath = Path(__file__).parent.parent / "data" / "kline" / f"{code.zfill(5)}.json"
-    if not filepath.exists():
+def load_kline(code: str, db_path: Path = DB_PATH) -> pd.DataFrame:
+    """从 SQLite 加载 K 线数据"""
+    df = storage.load_klines(code, db_path)
+    if df.empty:
         raise FileNotFoundError(
-            f"数据文件不存在: {filepath}\n"
-            f"请先运行: python scripts/download_kline.py --code {code}"
+            f"数据库中无 {code.zfill(5)} 的 K 线数据\n"
+            f"请先运行: python scripts/download_kline.py --code {code} --years 5"
         )
-    payload = json.loads(filepath.read_text())
-    df = pd.DataFrame(payload["data"])
+    df = df.copy()
     df["date"] = pd.to_datetime(df["date"])
-    return df.sort_values("date").reset_index(drop=True)
+    return df.reset_index(drop=True)
 
 
 def main():
