@@ -120,3 +120,12 @@ def test_import_json(tmp_path):
     # 重复导入幂等
     assert storage.import_json("00700", json_path, db) == 0
     assert len(storage.load_klines("00700", db)) == 2
+
+
+def test_code_normalized_to_five_digits(tmp_path):
+    """代码统一归一化为 5 位，'700' 与 '00700' 是同一只股票"""
+    db = tmp_path / "test.db"
+    storage.replace_klines("700", [bar("2024-01-02")], db)  # 不带前导零
+    assert storage.list_codes(db) == ["00700"]
+    assert len(storage.load_klines("00700", db)) == 1
+    assert len(storage.load_klines("700", db)) == 1  # 两种写法命中同一数据

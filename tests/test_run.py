@@ -26,3 +26,10 @@ def test_load_kline_empty_raises(tmp_path):
     db = tmp_path / "test.db"
     with pytest.raises(FileNotFoundError, match="download_kline"):
         run_module.load_kline("00700", db_path=db)
+
+
+def test_load_kline_normalizes_code(tmp_path):
+    db = tmp_path / "test.db"
+    storage.replace_klines("00700", [bar("2024-01-02")], db)
+    df = run_module.load_kline("700", db_path=db)  # 不带前导零也能命中
+    assert len(df) == 1

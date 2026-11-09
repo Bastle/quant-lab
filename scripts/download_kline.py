@@ -45,8 +45,14 @@ def fetch_bars(code: str, count: int, start: str = "", end: str = "") -> list[di
     url = f"{TENCENT_KLINE_URL}?param={symbol},day,{start},{end},{count},qfq"
     print(f"  请求: {url}")
     json_data = _get_json(url)
-    day_data = json_data.get("data", {}).get(symbol, {}).get("day") or \
-               json_data.get("data", {}).get(symbol, {}).get("qfqday") or []
+    # 防御式取数：API 返回异常形状（data 非字典、day 非数组等）时返回空而不是抛异常
+    node = json_data.get("data") if isinstance(json_data, dict) else None
+    sym = node.get(symbol) if isinstance(node, dict) else None
+    day_data = None
+    if isinstance(sym, dict):
+        day_data = sym.get("day") or sym.get("qfqday")
+    if not isinstance(day_data, list):
+        day_data = []
     klines = []
     for item in day_data:
         try:
@@ -54,7 +60,7 @@ def fetch_bars(code: str, count: int, start: str = "", end: str = "") -> list[di
                 "date": str(item[0]), "open": float(item[1]), "close": float(item[2]),
                 "high": float(item[3]), "low": float(item[4]), "volume": float(item[5]),
             })
-        except (IndexError, ValueError):
+        except (IndexError, ValueError, TypeError):
             continue
     return [k for k in klines if k["open"] > 0 and k["close"] > 0]
 
@@ -89,7 +95,16 @@ def write_json_file(code: str, data: list[dict], kline_dir: Path = KLINE_DIR) ->
 
 def save_kline(code: str, data: list[dict], db_path: Path = DB_PATH,
                kline_dir: Path = KLINE_DIR, write_json: bool = True):
-    """保存 K 线：SQLite 必写，JSON 双写（热力图项目共享格式，可用 write_json=False 关闭）"""
+    """保存 K 线：SQLite 必写，JSON 双写（热力图项目共享格式，可用 write_json=False 关闭）
+
+    护栏：库中已有数据时，返回条数不足现有条数的 90% 视为分页中断，拒绝整段替换。
+    """
+    code = str(code).zfill(5)
+    existing_n = len(storage.load_klines(code, db_path))
+    if existing_n > 0 and len(data) < 0.9 * existing_n:
+        raise ValueError(
+            f"{code}: 返回 {len(data)} 条 < 库中 {existing_n} 条的 90%，"
+            f"疑似分页中断，拒绝整段替换（请稍后重试）")
     n = storage.replace_klines(code, data, db_path)
     print(f"  保存: SQLite {code.zfill(5)} ({n} 条)")
     if write_json:
@@ -109,18 +124,28 @@ def update_code(code: str, count: int | None = None, db_path: Path = DB_PATH,
     existing_dates = set(existing["date"]) if not existing.empty else set()
 
     if full:
-        bars = download_kline(code, count or (len(existing) or 240))
+        target = count or (len(existing) or 240)
+        bars = download_kline(code, target)
         mode = "full"
     elif existing.empty:
-        bars = download_kline(code, count or 240)
+        target = count or 240
+        bars = download_kline(code, target)
         mode = "auto-full"
     else:
+        target = UPDATE_WINDOW
         bars = download_kline(code, UPDATE_WINDOW)
         mode = "incremental"
 
     if not bars:
         print("  跳过: 无数据（停牌/退市？）")
         return {"code": code, "mode": "empty", "new_bars": 0}
+
+    if mode == "full" and not existing.empty:
+        # 护栏：返回条数远少于预期（疑似分页中断）时中止替换，保留原历史
+        threshold = 0.9 * min(target, len(existing))
+        if len(bars) < threshold:
+            print(f"  中止: 返回 {len(bars)} 条 < 预期 {threshold:.0f} 条，保留原数据（可重试）")
+            return {"code": code, "mode": "aborted", "new_bars": 0}
 
     if mode == "incremental":
         new_bars = storage.upsert_klines(code, bars, db_path)
@@ -146,12 +171,14 @@ def update_all(count: int | None = None, db_path: Path = DB_PATH,
         try:
             r = update_code(code, count, db_path=db_path, kline_dir=kline_dir,
                             write_json=write_json, full=full)
-        except (requests.RequestException, ValueError) as e:
+        except Exception as e:  # 单只异常不击穿批量循环（网络/解析/意外形状）
             print(f"  失败: {e}")
             summary["failed"] += 1
             continue
         summary["added"] += r["new_bars"]
-        if r["new_bars"] > 0:
+        if r["mode"] == "aborted":
+            summary["failed"] += 1
+        elif r["new_bars"] > 0:
             summary["updated"] += 1
         else:
             summary["unchanged"] += 1
@@ -187,7 +214,7 @@ def download_list(list_name: str, count: int, db_path: Path = DB_PATH,
         print(f"[{i}/{len(codes)}] {code}")
         try:
             data = download_kline(code, count)
-        except (requests.RequestException, ValueError) as e:
+        except Exception as e:  # 单只异常不击穿批量循环（网络/解析/意外形状）
             print(f"  失败: {e}")
             summary["failed"] += 1
             continue

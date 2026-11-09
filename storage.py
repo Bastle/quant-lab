@@ -16,6 +16,11 @@ from config import DB_PATH
 _COLUMNS = ["date", "open", "high", "low", "close", "volume"]
 
 
+def _norm(code) -> str:
+    """股票代码统一为 5 位（'700' → '00700'）"""
+    return str(code).zfill(5)
+
+
 def init_db(db_path: Path = DB_PATH):
     """建表（幂等）"""
     with sqlite3.connect(db_path) as conn:
@@ -40,6 +45,7 @@ def _dedupe(bars: list[dict]) -> list[dict]:
 
 def replace_klines(code: str, bars: list[dict], db_path: Path = DB_PATH) -> int:
     """整段替换该股票的 K 线（先清后写），返回写入条数"""
+    code = _norm(code)
     init_db(db_path)
     rows = _dedupe(bars)
     now = datetime.now().isoformat()
@@ -57,9 +63,13 @@ def replace_klines(code: str, bars: list[dict], db_path: Path = DB_PATH) -> int:
 def upsert_klines(code: str, bars: list[dict], db_path: Path = DB_PATH) -> int:
     """增量写入：只把库中没有的新日期计入返回值，重叠日期顺带覆盖，历史不删。
 
+    ⚠️ qfq 基准会随分红除权漂移，跨时间拼接的新旧 K 线可能基准不一致，
+    定期用 replace_klines 整段重拉校正（见 README「数据更新」）。
+
     Returns:
         新增（此前不存在的日期）条数
     """
+    code = _norm(code)
     init_db(db_path)
     rows = _dedupe(bars)
     now = datetime.now().isoformat()
@@ -85,6 +95,7 @@ def import_json(code: str, json_path: Path, db_path: Path = DB_PATH) -> int:
 
 def load_klines(code: str, db_path: Path = DB_PATH) -> pd.DataFrame:
     """读取该股票全部 K 线，按日期升序"""
+    code = _norm(code)
     init_db(db_path)
     with sqlite3.connect(db_path) as conn:
         df = pd.read_sql_query(
@@ -105,6 +116,7 @@ def list_codes(db_path: Path = DB_PATH) -> list[str]:
 
 def delete_klines(code: str, db_path: Path = DB_PATH):
     """删除该股票全部 K 线"""
+    code = _norm(code)
     init_db(db_path)
     with sqlite3.connect(db_path) as conn:
         conn.execute("DELETE FROM kline WHERE code = ?", (code,))

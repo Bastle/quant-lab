@@ -61,7 +61,7 @@ def test_update_code_suspended_skip(tmp_path, monkeypatch):
 def test_update_code_full_replaces(tmp_path, monkeypatch):
     db, kline_dir = make_env(tmp_path)
     storage.replace_klines("00700", [bar("2024-01-02", 102.0), bar("2024-01-03", 103.0)], db)
-    fetched = [bar("2024-02-01", 201.0)]
+    fetched = [bar("2024-02-01", 201.0), bar("2024-02-02", 202.0), bar("2024-02-03", 203.0)]
     calls = []
 
     def fake_download(code, count):
@@ -75,7 +75,29 @@ def test_update_code_full_replaces(tmp_path, monkeypatch):
     assert calls == [2]  # 重拉条数沿用库中现有条数
 
     df = storage.load_klines("00700", db)
-    assert list(df["date"]) == ["2024-02-01"]  # 旧数据被清除，新数据写入
+    assert list(df["date"]) == ["2024-02-01", "2024-02-02", "2024-02-03"]  # 旧数据被清除，新数据写入
+
+
+def test_full_aborts_when_response_shrinks_history(tmp_path, monkeypatch):
+    """返回条数远少于预期（疑似分页中断）时中止替换，保留原历史"""
+    db, kline_dir = make_env(tmp_path)
+    storage.replace_klines("00700", [bar(f"2024-01-{d:02d}") for d in range(2, 7)], db)  # 5 条
+    monkeypatch.setattr(download_kline, "download_kline",
+                        lambda code, count: [bar("2024-02-01"), bar("2024-02-02")])  # 只回 2 条
+
+    r = download_kline.update_code("00700", db_path=db, kline_dir=kline_dir, full=True)
+    assert r == {"code": "00700", "mode": "aborted", "new_bars": 0}
+    assert len(storage.load_klines("00700", db)) == 5  # 旧历史完好
+
+
+def test_update_all_counts_aborted_as_failed(tmp_path, monkeypatch):
+    db, kline_dir = make_env(tmp_path)
+    storage.replace_klines("00700", [bar(f"2024-01-{d:02d}") for d in range(2, 7)], db)  # 5 条
+    monkeypatch.setattr(download_kline, "download_kline",
+                        lambda code, count: [bar("2024-02-01"), bar("2024-02-02")])  # 只回 2 条
+
+    summary = download_kline.update_all(db_path=db, kline_dir=kline_dir, full=True)
+    assert summary == {"added": 0, "updated": 0, "unchanged": 0, "failed": 1}
 
 
 def test_update_code_auto_full_when_no_existing(tmp_path, monkeypatch):

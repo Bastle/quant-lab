@@ -13,11 +13,15 @@ from config import DB_PATH, KLINE_DIR
 
 
 def import_dir(json_dir: Path, db_path: Path = DB_PATH) -> dict:
-    """把目录下所有 {code}.json 导入 SQLite，返回 {code: 新增条数}"""
+    """把目录下所有 {code}.json 导入 SQLite，返回 {code: 新增条数}（坏文件跳过）"""
     summary = {}
     for filepath in sorted(Path(json_dir).glob("*.json")):
         code = filepath.stem
-        n = storage.import_json(code, filepath, db_path)
+        try:
+            n = storage.import_json(code, filepath, db_path)
+        except Exception as e:  # 单个坏文件不中断整批导入
+            print(f"  {code}: 跳过（{e}）")
+            continue
         summary[code] = n
         print(f"  {code}: 新增 {n} 条")
     return summary
