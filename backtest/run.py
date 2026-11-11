@@ -36,6 +36,8 @@ def main():
     parser.add_argument("--long", type=int, default=20, help="MA 长周期")
     parser.add_argument("--filter", type=int, default=0,
                         help="趋势过滤均线周期（如 200；0=关闭）。金叉须在该均线上方才买入")
+    parser.add_argument("--filter-exit", action="store_true",
+                        help="跌破过滤均线当天强制清仓（需配合 --filter）")
     args = parser.parse_args()
 
     df = load_kline(args.code)
@@ -43,7 +45,7 @@ def main():
 
     if args.strategy == "ma_cross":
         strategy = MACrossStrategy(short_period=args.short, long_period=args.long,
-                                   filter_period=args.filter)
+                                   filter_period=args.filter, filter_exit=args.filter_exit)
     else:
         raise ValueError(f"未知策略: {args.strategy}")
 
@@ -51,7 +53,8 @@ def main():
     result = engine.run(df, strategy)
     title = f"MA{args.short}/{args.long} 金叉策略"
     if args.filter:
-        title += f"（MA{args.filter} 趋势过滤）"
+        title += f"（MA{args.filter} 趋势过滤"
+        title += "+破线清仓）" if args.filter_exit else "）"
     print_report(result, f"{title} - {args.code}")
 
 

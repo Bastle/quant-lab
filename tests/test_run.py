@@ -48,11 +48,32 @@ def test_cli_passes_filter_to_strategy(monkeypatch):
     captured = {}
     real_cls = run_module.MACrossStrategy
 
-    def spy(short_period, long_period, filter_period=0):
+    def spy(short_period, long_period, filter_period=0, filter_exit=False):
         captured["filter_period"] = filter_period
-        return real_cls(short_period, long_period, filter_period)
+        return real_cls(short_period, long_period, filter_period, filter_exit)
 
     monkeypatch.setattr(run_module, "MACrossStrategy", spy)
     monkeypatch.setattr(sys, "argv", ["run", "--code", "00700", "--filter", "30"])
     run_module.main()
     assert captured["filter_period"] == 30
+
+
+def test_cli_passes_filter_exit_to_strategy(monkeypatch):
+    """--filter-exit 参数透传给 MACrossStrategy"""
+    prices = [100.0, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+    dates = pd.date_range("2024-01-01", periods=10, freq="B")
+    df = pd.DataFrame({"date": dates, "open": prices, "high": prices,
+                       "low": prices, "close": prices, "volume": [1000.0] * 10})
+    monkeypatch.setattr(run_module, "load_kline", lambda code, db_path=None: df)
+
+    captured = {}
+    real_cls = run_module.MACrossStrategy
+
+    def spy(short_period, long_period, filter_period=0, filter_exit=False):
+        captured["filter_exit"] = filter_exit
+        return real_cls(short_period, long_period, filter_period, filter_exit)
+
+    monkeypatch.setattr(run_module, "MACrossStrategy", spy)
+    monkeypatch.setattr(sys, "argv", ["run", "--code", "00700", "--filter", "200", "--filter-exit"])
+    run_module.main()
+    assert captured["filter_exit"] is True

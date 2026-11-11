@@ -43,12 +43,15 @@ class MACrossStrategy(Strategy):
     - MA 短周期下穿 MA 长周期 → 卖出
     - filter_period > 0 时启用趋势过滤：金叉当日收盘价须在 MA(filter_period) 上方
       才买入（只禁止开新仓，卖出不受过滤影响）
+    - filter_exit=True 时更进一步：收盘价跌破 MA(filter_period) 当天强制卖出（清仓）
     """
 
-    def __init__(self, short_period: int = 5, long_period: int = 20, filter_period: int = 0):
+    def __init__(self, short_period: int = 5, long_period: int = 20,
+                 filter_period: int = 0, filter_exit: bool = False):
         self.short_period = short_period
         self.long_period = long_period
         self.filter_period = filter_period
+        self.filter_exit = filter_exit
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         df = df.copy()
@@ -68,16 +71,22 @@ class MACrossStrategy(Strategy):
             if pd.isna(prev_short) or pd.isna(prev_long):
                 continue
 
+            # 趋势过滤：收盘价在过滤均线下方时金叉作废（均线历史不足时不拦截）
+            below_filter = False
+            if self.filter_period > 0:
+                ma_filter = df["ma_filter"].iloc[i]
+                below_filter = not pd.isna(ma_filter) and df["close"].iloc[i] <= ma_filter
+
             # 金叉：短均线从下往上穿越长均线
             if prev_short <= prev_long and curr_short > curr_long:
-                # 趋势过滤：收盘价在过滤均线下方时金叉作废（均线历史不足时不拦截）
-                if self.filter_period > 0:
-                    ma_filter = df["ma_filter"].iloc[i]
-                    if not pd.isna(ma_filter) and df["close"].iloc[i] <= ma_filter:
-                        continue
-                signals.iloc[i] = Signal.BUY
+                if not below_filter:
+                    signals.iloc[i] = Signal.BUY
             # 死叉：短均线从上往下穿越长均线
             elif prev_short >= prev_long and curr_short < curr_long:
+                signals.iloc[i] = Signal.SELL
+
+            # 强制清仓：跌破过滤均线当天发卖出（优先级最高，覆盖金叉日）
+            if below_filter and self.filter_exit:
                 signals.iloc[i] = Signal.SELL
 
         return signals

@@ -56,3 +56,36 @@ def test_filter_does_not_force_sell():
     filtered = MACrossStrategy(short_period=2, long_period=3, filter_period=5).generate_signals(df)
     # 数据集 1 中 idx 9 有死叉，close(48) < MA5，但卖出信号不受过滤影响
     assert filtered.iloc[9] == Signal.SELL
+
+
+def test_filter_exit_forces_sell_below_ma():
+    """filter_exit=True：收盘价跌破过滤均线当天强制卖出（即使没有死叉）"""
+    df = make_df(BELOW_MA)
+    base = MACrossStrategy(short_period=2, long_period=3, filter_period=5).generate_signals(df)
+    exit_mode = MACrossStrategy(short_period=2, long_period=3, filter_period=5,
+                                filter_exit=True).generate_signals(df)
+
+    ma5 = calc_ma(df["close"], 5)
+    below = [i for i in range(len(df)) if df["close"].iloc[i] <= ma5.iloc[i]]
+    assert below, "前提：数据集中存在跌破 MA5 的交易日"
+    # 跌破均线的每一天都发出卖出信号
+    assert all(exit_mode.iloc[i] == Signal.SELL for i in below)
+    # 而不强制清仓模式下这些日子大多不是卖出（说明信号是 filter_exit 的功劳）
+    assert any(base.iloc[i] != Signal.SELL for i in below)
+
+
+def test_filter_exit_keeps_buy_above_ma():
+    """filter_exit=True：均线上方的金叉照常买入（只改卖出行为）"""
+    df = make_df(ABOVE_MA)
+    exit_mode = MACrossStrategy(short_period=2, long_period=3, filter_period=5,
+                                filter_exit=True).generate_signals(df)
+    assert (exit_mode == Signal.BUY).sum() == 1  # 均线上方金叉放行
+
+
+def test_filter_exit_default_off():
+    """filter_exit 默认关闭，行为与只禁止开新仓完全一致"""
+    df = make_df(BELOW_MA)
+    default = MACrossStrategy(short_period=2, long_period=3, filter_period=5).generate_signals(df)
+    explicit = MACrossStrategy(short_period=2, long_period=3, filter_period=5,
+                               filter_exit=False).generate_signals(df)
+    assert list(default) == list(explicit)
