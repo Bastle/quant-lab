@@ -71,7 +71,11 @@ MA 金叉类策略影响很小；做精确回测（事件驱动、分红策略�
 ```bash
 python -m backtest.run --code 00700 --strategy ma_cross          # 默认 MA5/20
 python -m backtest.run --code 00700 --strategy ma_cross --short 10 --long 60
+python -m backtest.run --code 00700 --strategy ma_cross --filter 200   # 趋势过滤
 ```
+
+**趋势过滤**（`--filter N`，如 MA200）：金叉须发生在过滤均线上方才买入（过滤逆势反弹）；
+只禁止开新仓，卖出仍由死叉决定。`--filter 0` 或不加 = 关闭。
 
 交易成本已内置（见 `config.py`）：佣金 0.03%（最低 5 元）、印花税 0.13%（卖出）、滑点 0.1%。
 所有回测均按前复权价格计算。数据仅供研究，不构成任何交易建议。

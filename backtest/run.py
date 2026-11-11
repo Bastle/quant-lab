@@ -34,19 +34,25 @@ def main():
     parser.add_argument("--strategy", default="ma_cross", help="策略名称")
     parser.add_argument("--short", type=int, default=5, help="MA 短周期")
     parser.add_argument("--long", type=int, default=20, help="MA 长周期")
+    parser.add_argument("--filter", type=int, default=0,
+                        help="趋势过滤均线周期（如 200；0=关闭）。金叉须在该均线上方才买入")
     args = parser.parse_args()
 
     df = load_kline(args.code)
     print(f"加载 {args.code} K 线: {len(df)} 条 ({df['date'].iloc[0].date()} ~ {df['date'].iloc[-1].date()})")
 
     if args.strategy == "ma_cross":
-        strategy = MACrossStrategy(short_period=args.short, long_period=args.long)
+        strategy = MACrossStrategy(short_period=args.short, long_period=args.long,
+                                   filter_period=args.filter)
     else:
         raise ValueError(f"未知策略: {args.strategy}")
 
     engine = BacktestEngine(BacktestConfig())
     result = engine.run(df, strategy)
-    print_report(result, f"MA{args.short}/{args.long} 金叉策略 - {args.code}")
+    title = f"MA{args.short}/{args.long} 金叉策略"
+    if args.filter:
+        title += f"（MA{args.filter} 趋势过滤）"
+    print_report(result, f"{title} - {args.code}")
 
 
 if __name__ == "__main__":

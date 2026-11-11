@@ -1,4 +1,6 @@
 """回测入口测试"""
+import sys
+
 import pandas as pd
 import pytest
 
@@ -33,3 +35,24 @@ def test_load_kline_normalizes_code(tmp_path):
     storage.replace_klines("00700", [bar("2024-01-02")], db)
     df = run_module.load_kline("700", db_path=db)  # 不带前导零也能命中
     assert len(df) == 1
+
+
+def test_cli_passes_filter_to_strategy(monkeypatch):
+    """--filter 参数透传给 MACrossStrategy"""
+    prices = [100.0, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+    dates = pd.date_range("2024-01-01", periods=10, freq="B")
+    df = pd.DataFrame({"date": dates, "open": prices, "high": prices,
+                       "low": prices, "close": prices, "volume": [1000.0] * 10})
+    monkeypatch.setattr(run_module, "load_kline", lambda code, db_path=None: df)
+
+    captured = {}
+    real_cls = run_module.MACrossStrategy
+
+    def spy(short_period, long_period, filter_period=0):
+        captured["filter_period"] = filter_period
+        return real_cls(short_period, long_period, filter_period)
+
+    monkeypatch.setattr(run_module, "MACrossStrategy", spy)
+    monkeypatch.setattr(sys, "argv", ["run", "--code", "00700", "--filter", "30"])
+    run_module.main()
+    assert captured["filter_period"] == 30
