@@ -69,15 +69,31 @@ MA 金叉类策略影响很小；做精确回测（事件驱动、分红策略�
 ## 回测使用
 
 ```bash
-python -m backtest.run --code 00700 --strategy ma_cross          # 默认 MA5/20
+python -m backtest.run --code 00700 --strategy ma_cross          # MA 金叉，默认 MA5/20
 python -m backtest.run --code 00700 --strategy ma_cross --short 10 --long 60
 python -m backtest.run --code 00700 --strategy ma_cross --filter 200   # 趋势过滤
 python -m backtest.run --code 00700 --strategy ma_cross --filter 200 --filter-exit  # +破线清仓
+python -m backtest.run --code 00700 --strategy price_ma          # 价格×MA200 趋势跟随
+python -m backtest.run --code 00700 --strategy price_ma --ma 60  # 换均线周期
+python -m backtest.run --code 00700 --strategy template          # 趋势模板策略（7 条件翻转入场）
+python -m backtest.run --code 00700 --vol-ratio 1.5              # 买入放量确认
+python -m backtest.run --code 00700 --volume-exit                # 巨量出货卖出
+python -m backtest.run --code 00700 --trailing-stop 8            # 移动止损 8%
+python -m backtest.run --code 00700 --trend-template             # 趋势模板买入过滤
 ```
 
 **趋势过滤**（`--filter N`，如 MA200）：金叉须发生在过滤均线上方才买入（过滤逆势反弹）；
 只禁止开新仓，卖出仍由死叉决定。`--filter 0` 或不加 = 关闭。
 **破线清仓**（`--filter-exit`，需配合 `--filter`）：收盘价跌破过滤均线当天强制卖出。
+**量比放量确认**（`--vol-ratio X`）：买入信号当日量比（当日量 / 前 5 日均量）须 ≥ X 才买入，只禁止开新仓。
+**巨量出货卖出**（`--volume-exit`）：连续 3 日成交量 ≥ 前 250 日 95 分位且 3 日累计下跌 → 卖出；
+开启后替换死叉/下穿卖出。
+**移动止损**（`--trailing-stop X`）：持仓期收盘价从最高收盘价回撤超过 X% → 卖出（优先级最高，可与以上任意组合）。
+**趋势模板**（`--trend-template`）：Minervini 7 条件全满足才买入（价在 MA50/150/200 上、MA50>MA150>MA200、
+MA200 上涨≥1 个月、高出 52 周低点 ≥25%、距 52 周高点 25% 以内）；任一不满足或数据不足 → 不买。只禁止开新仓。
+**趋势模板策略**（`--strategy template`）：7 条件由不满足**翻转**为全满足的当天买入（不依赖上穿事件），
+持续满足不重复买；卖出后须等模板重新翻转才再入场。卖出 = 收盘价下穿 MA（`--ma`，默认 200），
+可叠加 `--volume-exit`（替换下穿）与 `--trailing-stop`。模板破坏不触发卖出——7 条件只做买入限制。
 
 交易成本已内置（见 `config.py`）：佣金 0.03%（最低 5 元）、印花税 0.13%（卖出）、滑点 0.1%。
 所有回测均按前复权价格计算。数据仅供研究，不构成任何交易建议。
