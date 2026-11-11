@@ -62,7 +62,7 @@ def _apply_trailing_stop(df: pd.DataFrame, signals: pd.Series, pct: float) -> pd
 
 
 def _apply_volume_exit(df: pd.DataFrame, signals: pd.Series) -> pd.Series:
-    """巨量出货卖出（B+V1）：连续 3 日成交量 ≥ 前 250 日 95 分位 且 3 日累计下跌 → 当日卖出
+    """巨量出货卖出：连续 3 日成交量 ≥ 前 250 日 95 分位 且 3 日累计下跌 → 当日卖出
 
     优先级最高（覆盖买入及其他卖出）。
     """

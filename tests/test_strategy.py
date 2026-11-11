@@ -185,7 +185,7 @@ def test_vol_ratio_price_ma_blocks_and_allows():
     assert PriceMACrossStrategy(period=3, vol_ratio=1.5).generate_signals(high).iloc[6] == Signal.BUY
 
 
-# ---- 巨量出货卖出（B+V1：连续 3 日量≥250日95分位 且 3日累计下跌）----
+# ---- 巨量出货卖出（连续 3 日量≥250日95分位 且 3日累计下跌）----
 
 def make_spike_df(prices_tail: list[float], volumes_tail: list[float], n: int = 257) -> pd.DataFrame:
     """前 n 天横盘 100（成交量 80~120 循环，95 分位≈120），尾部接自定义价格/成交量"""
@@ -388,14 +388,14 @@ def test_template_strategy_no_buy_when_data_insufficient():
 
 
 def test_template_strategy_no_rebuy_without_reflip():
-    """B+V1 卖出后模板仍满足（未翻转）→ 不回补，须等重新翻转"""
+    """巨量出货卖出后模板仍满足（未翻转）→ 不回补，须等重新翻转"""
     cyc = [80.0, 90.0, 100.0, 110.0, 120.0]
     prices = [100.0 + 0.2 * i for i in range(300)] + [158.0, 157.0, 156.0, 157.0, 158.0, 159.0]
     volumes = (cyc * 61)[:300] + [200.0, 200.0, 200.0, 100.0, 100.0, 100.0]
     df = make_df(prices, volumes)
     signals = TrendTemplateStrategy(volume_exit=True).generate_signals(df)
     assert signals.iloc[249] == Signal.BUY    # 翻转买入
-    assert signals.iloc[302] == Signal.SELL   # B+V1 第 3 日卖出（3 日巨量 + 累计下跌）
+    assert signals.iloc[302] == Signal.SELL   # 巨量出货第 3 日卖出（3 日巨量 + 累计下跌）
     assert (signals == Signal.BUY).sum() == 1  # 卖出后模板未破坏 → 无翻转 → 不回补
 
 
